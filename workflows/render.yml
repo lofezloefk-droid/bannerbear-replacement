@@ -1,0 +1,338 @@
+name: Render Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      background:
+        required: true
+        type: string
+
+      logo:
+        required: true
+        type: string
+
+      title:
+        required: true
+        type: string
+
+      episode:
+        required: true
+        type: string
+
+      channel:
+        required: true
+        type: string
+
+      webhook_url:
+        required: true
+        type: string
+
+      cloudinary_cloud_name:
+        required: true
+        type: string
+
+      cloudinary_api_key:
+        required: true
+        type: string
+
+      cloudinary_api_secret:
+        required: true
+        type: string
+
+      renderer:
+        required: true
+        type: string
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # --------------------------------------------------
+      # Checkout repository
+      # --------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # --------------------------------------------------
+      # Setup Python
+      # --------------------------------------------------
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # --------------------------------------------------
+      # Install dependencies
+      # --------------------------------------------------
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      # --------------------------------------------------
+      # Create input.json
+      # --------------------------------------------------
+      - name: Create input.json
+        env:
+          BACKGROUND: ${{ inputs.background }}
+          LOGO: ${{ inputs.logo }}
+          TITLE: ${{ inputs.title }}
+          EPISODE: ${{ inputs.episode }}
+          CHANNEL: ${{ inputs.channel }}
+          WEBHOOK_URL: ${{ inputs.webhook_url }}
+          CLOUDINARY_CLOUD_NAME: ${{ inputs.cloudinary_cloud_name }}
+          CLOUDINARY_API_KEY: ${{ inputs.cloudinary_api_key }}
+          CLOUDINARY_API_SECRET: ${{ inputs.cloudinary_api_secret }}
+          RENDERER: ${{ inputs.renderer }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+
+          data = {
+              "background": os.environ["BACKGROUND"],
+              "logo": os.environ["LOGO"],
+              "title": os.environ["TITLE"],
+              "episode": os.environ["EPISODE"],
+              "channel": os.environ["CHANNEL"],
+              "webhook_url": os.environ["WEBHOOK_URL"],
+              "cloudinary_cloud_name": os.environ["CLOUDINARY_CLOUD_NAME"],
+              "cloudinary_api_key": os.environ["CLOUDINARY_API_KEY"],
+              "cloudinary_api_secret": os.environ["CLOUDINARY_API_SECRET"],
+              "renderer": os.environ["RENDERER"],
+              "include_logo": True
+          }
+
+          with open("input.json", "w", encoding="utf-8") as f:
+              json.dump(data, f, ensure_ascii=False, indent=2)
+          PY
+
+      # --------------------------------------------------
+      # Render image WITH logo
+      # --------------------------------------------------
+      - name: Render image with logo
+        env:
+          RENDERER: ${{ inputs.renderer }}
+        run: |
+          case "$RENDERER" in
+            1)
+              python renderer1.py input.json
+              ;;
+            2)
+              python renderer2.py input.json
+              ;;
+            3)
+              python renderer3.py input.json
+              ;;
+            4)
+              python renderer4.py input.json
+              ;;
+            5)
+              python renderer5.py input.json
+              ;;
+            6)
+              python renderer6.py input.json
+              ;;
+            7)
+              python renderer7.py input.json
+              ;;
+            8)
+              python renderer8.py input.json
+              ;;
+            *)
+              echo "Invalid renderer: $RENDERER"
+              echo "Allowed values: 1, 2, 3, 4, 5, 6, 7, 8"
+              exit 1
+              ;;
+          esac
+
+      # --------------------------------------------------
+      # Save image WITH logo
+      # --------------------------------------------------
+      - name: Save image with logo
+        run: |
+          cp output/output.png output/output_with_logo.png
+
+      # --------------------------------------------------
+      # Render image WITHOUT logo
+      # --------------------------------------------------
+      - name: Render image without logo
+        env:
+          RENDERER: ${{ inputs.renderer }}
+        run: |
+          python - <<'PY'
+          import json
+
+          with open("input.json", "r", encoding="utf-8") as f:
+              data = json.load(f)
+
+          data["include_logo"] = False
+
+          with open("input_without_logo.json", "w", encoding="utf-8") as f:
+              json.dump(data, f, ensure_ascii=False, indent=2)
+          PY
+
+          case "$RENDERER" in
+            1)
+              python renderer1.py input_without_logo.json
+              ;;
+            2)
+              python renderer2.py input_without_logo.json
+              ;;
+            3)
+              python renderer3.py input_without_logo.json
+              ;;
+            4)
+              python renderer4.py input_without_logo.json
+              ;;
+            5)
+              python renderer5.py input_without_logo.json
+              ;;
+            6)
+              python renderer6.py input_without_logo.json
+              ;;
+            7)
+              python renderer7.py input_without_logo.json
+              ;;
+            8)
+              python renderer8.py input_without_logo.json
+              ;;
+            *)
+              echo "Invalid renderer: $RENDERER"
+              exit 1
+              ;;
+          esac
+
+          cp output/output.png output/output_without_logo.png
+          cp output/output_with_logo.png output/output.png
+
+      # --------------------------------------------------
+      # Upload images to Cloudinary
+      # --------------------------------------------------
+      - name: Upload images to Cloudinary
+        env:
+          CLOUDINARY_CLOUD_NAME: ${{ inputs.cloudinary_cloud_name }}
+          CLOUDINARY_API_KEY: ${{ inputs.cloudinary_api_key }}
+          CLOUDINARY_API_SECRET: ${{ inputs.cloudinary_api_secret }}
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import time
+          import requests
+
+          cloud_name = os.environ["CLOUDINARY_CLOUD_NAME"]
+          api_key = os.environ["CLOUDINARY_API_KEY"]
+          api_secret = os.environ["CLOUDINARY_API_SECRET"]
+
+          def upload_image(file_path):
+              timestamp = int(time.time())
+
+              signature_string = f"timestamp={timestamp}{api_secret}"
+              signature = hashlib.sha1(
+                  signature_string.encode("utf-8")
+              ).hexdigest()
+
+              url = (
+                  f"https://api.cloudinary.com/v1_1/"
+                  f"{cloud_name}/image/upload"
+              )
+
+              with open(file_path, "rb") as image_file:
+                  response = requests.post(
+                      url,
+                      files={"file": image_file},
+                      data={
+                          "api_key": api_key,
+                          "timestamp": timestamp,
+                          "signature": signature
+                      },
+                      timeout=120
+                  )
+
+              response.raise_for_status()
+              result = response.json()
+              return result["secure_url"]
+
+          secure_url_with_logo = upload_image("output/output_with_logo.png")
+          secure_url_without_logo = upload_image("output/output_without_logo.png")
+
+          print("Cloudinary upload successful")
+          print("With logo:")
+          print(secure_url_with_logo)
+          print("Without logo:")
+          print(secure_url_without_logo)
+
+          with open("cloudinary_urls.json", "w", encoding="utf-8") as f:
+              json.dump(
+                  {
+                      "secure_url_with_logo": secure_url_with_logo,
+                      "secure_url_without_logo": secure_url_without_logo
+                  },
+                  f,
+                  ensure_ascii=False,
+                  indent=2
+              )
+          PY
+
+      # --------------------------------------------------
+      # Send URLs + input data to n8n
+      # --------------------------------------------------
+      - name: Send URLs to n8n
+        env:
+          WEBHOOK_URL: ${{ inputs.webhook_url }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import requests
+
+          webhook_url = os.environ["WEBHOOK_URL"]
+
+          # قراءة روابط Cloudinary
+          with open("cloudinary_urls.json", "r", encoding="utf-8") as f:
+              urls = json.load(f)
+
+          # قراءة بيانات الإدخال الأصلية
+          with open("input.json", "r", encoding="utf-8") as f:
+              input_data = json.load(f)
+
+          # البيانات التي سيتم إرسالها إلى n8n
+          data = {
+              "secure_url_with_logo": urls["secure_url_with_logo"],
+              "secure_url_without_logo": urls["secure_url_without_logo"],
+
+              "background": input_data["background"],
+              "logo": input_data["logo"],
+              "title": input_data["title"],
+              "episode": input_data["episode"],
+              "channel": input_data["channel"],
+
+              "cloudinary_cloud_name": input_data["cloudinary_cloud_name"],
+              "cloudinary_api_key": input_data["cloudinary_api_key"],
+              "cloudinary_api_secret": input_data["cloudinary_api_secret"],
+
+              "webhook_url": input_data["webhook_url"],
+              "renderer": input_data["renderer"]
+          }
+
+          response = requests.post(
+              webhook_url,
+              json=data,
+              timeout=30
+          )
+
+          response.raise_for_status()
+
+          print("All data sent to n8n successfully")
+
+          print(
+              json.dumps(
+                  data,
+                  ensure_ascii=False,
+                  indent=2
+              )
+          )
+          PY
